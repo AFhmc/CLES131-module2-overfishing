@@ -3,7 +3,7 @@ title: "Module 2: Overfishing"
 format: pdf
 editor: source
 editor_options: 
-  chunk_output_type: console
+  chunk_output_type: inline
 ---
 
 ```{r}
@@ -50,6 +50,22 @@ One of the main metadata tables is 'stock':
 
 -   In your own words, describe the unit of observation in the 'stock' table and some associated variables that describe it.
 
+```{r}
+#get number of stocks
+nrow(stock)
+
+#get number of species
+length(unique(stock$commonname))
+
+#see how many of each species there are
+stock |> group_by(commonname) |> summarize(Number = n()) |>arrange(desc(Number))
+
+```
+
+There are 1514 stocks, representing 410 unique species. The species with the most stocks are Pink salmon (170 stocks), Sockeye salmon (104 stocks), and Chum salmon (99 stocks).
+
+The unit of observation in the stocks table seems to be one population of a particular species. A stock is associated with a specific species and a specific location; and also has additional variables describing more details of the location (region or country of that location)  Each stock has a specific stock id and area id which can be used to index into some of the other tables.s
+
 ### Q2 (1 point)
 
 The next main metadata table is 'assessment':
@@ -59,6 +75,20 @@ The next main metadata table is 'assessment':
 -   It seems like 'stockid' and 'assessyear' might uniquely identify each assessment. Is this the case? If not, why not?
 
 -   Which variable(s) might you use to join 'stock' and 'assessment'?
+
+The unit of observation in the assessment table is a given assessment of a stock (species+location, as above). So, each stock (unit of observation in the stock table) has some number of assessments of that stock in the assment table.
+
+```{r}
+#check if there are any duplicate assessyears for any stockid
+assessment |> group_by(stockid) |> summarize(duplicates = n() - n_distinct(assessyear)) |> arrange(desc(duplicates))
+
+#look at the stock with duplicates
+assessment |> filter(stockid == "GHALBSAI")
+```
+
+We can see that stockid and assessyear do not uniquely identify an assessment, because for the GHALBSAI stock ("Greenland halibut Bering Sea and Aleutian Islands") there are two separate assessments of that stock with years 1960-2020 and two with years 1945-2018; these assesments have different recorders (SISIMP2021 and SISIMP2021-2).
+
+I would join stock and assessment using stockid, to represent that each stock in stock (uniquely identified by stockid) has some number of rows in assessment (and the rows in assessment corresponding to that stock are identified by the value of stockid).
 
 ### Q3 (1 point)
 
