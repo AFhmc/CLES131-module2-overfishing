@@ -118,6 +118,30 @@ There are two main data tables described in section C, but their key attributes 
 
 -   What is accomplished by joining these tables?
 
+```{r}
+#confirm that timeseries and tsmetrics can be joined on tsid and tsuniqe respectively
+timeseries |> group_by(tsid) |> summarize(count = n()) |> arrange(tsid)
+tsmetrics |> group_by(tsunique) |> summarize(count = n()) |> arrange(tsunique)
+
+#join the two; 
+#left join on time series because we need to add the metrics corresponding to a given type of time series to that time series row
+# there are more rows in timeseries than timeseries metrics and we want to keep those rows
+timeseries_with_metrics <- timeseries |> left_join(tsmetrics, join_by(tsid == tsunique))
+```
+```{r}
+#confirm that bioparams and biometrics can be joined on bioid and biounique respectively
+bioparams |> group_by(bioid) |> summarize(count = n()) |> arrange(bioid)
+biometrics |> group_by(biounique) |> summarize(count = n()) |> arrange(biounique)
+
+#join the two; 
+#left join on bioparams because we need to add the metrics corresponding to a given type of parameter to that parameter row
+# there are more rows in bioparams than biometrics and we want to keep those rows
+bioparams_with_metrics <- bioparams |> left_join(biometrics, join_by(bioid == biounique))
+```
+For the joined timeseries with metrics, the observational unit is one timeseries that is available in the relational database, stored with the assessment its from (which we can use to join with assessments), the stock its about, the years it covers; and after joining with metrics, information about what type of time series it is; aka what quantity it is a time series of and what units the measurements are in. This allows all the metadata for all available time series to be in one table.
+
+For the joined bioparams with metrics, the observational unit is as far as I can tell one parameter of a species that is used in a given assessment (ie fecundity, age of 50% maturity); I believe these are parameters that are some way used in whatever modeling goes into the creation of the data by the assessment. After joining the metrics, there is also more information about what the parameter is and what its units are. Again, this essentially allows all the information about parameters used by all the assessments to be in one table.
+
 
 ## Overexploitation of Atlantic cod
 
