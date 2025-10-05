@@ -138,7 +138,7 @@ biometrics |> group_by(biounique) |> summarize(count = n()) |> arrange(biounique
 # there are more rows in bioparams than biometrics and we want to keep those rows
 bioparams_with_metrics <- bioparams |> left_join(biometrics, join_by(bioid == biounique))
 ```
-For the joined timeseries with metrics, the observational unit is one timeseries that is available in the relational database, stored with the assessment its from (which we can use to join with assessments), the stock its about, the years it covers; and after joining with metrics, information about what type of time series it is; aka what quantity it is a time series of and what units the measurements are in. This allows all the metadata for all available time series to be in one table.
+For the joined timeseries with metrics, the observational unit is one year of a timeseries that is available in the relational database, stored with the assessment its from (which we can use to join with assessments), the stock its about, the year it has data for and the value of that data. After joining with metrics, the row also has information about what type of time series it is; aka what quantity the value is measuring and what units the measurements are in. This allows all the metadata for all available time series to be in one table.
 
 For the joined bioparams with metrics, the observational unit is as far as I can tell one parameter of a species that is used in a given assessment (ie fecundity, age of 50% maturity); I believe these are parameters that are some way used in whatever modeling goes into the creation of the data by the assessment. After joining the metrics, there is also more information about what the parameter is and what its units are. Again, this essentially allows all the information about parameters used by all the assessments to be in one table.
 
@@ -181,7 +181,7 @@ Cod_ts <- timeseries_with_metrics |> filter(stockid %in% Cod_IDs & !is.na(tsvalu
 Cod_ts |> filter(tsyear > 1950) |> group_by(tsid) |> summarize(metric_count = n(), meaning = first(tslong)) |> arrange(desc(metric_count))
 ```
 
-The 5 most commonly reported metrics in this time frame are CdivMEANC-ratio, TCbest-MT, TL-MT, SSB-MT, and R-E00. Respectively, these represent the catch/mean catch (normalized catch); general total catch (total catch if available, total landings if not available, guaranteed to use metric tons); total landings (I believe this means the number of caught and non released cod), spawning stock biomass (according to the international seafood sustainability foundation (ISSF), the total weight of all sexually mature female cod), and recruits (according to the ISSF, the number of fish in the youngest age group that is still considered exploitable by fisheries).
+The 5 most commonly reported metrics in this time frame are CdivMEANC-ratio, TCbest-MT, TL-MT, SSB-MT, and R-E00. Respectively, these represent the catch divided by mean catch (basically, normalized catch); general total catch (total catch if available, total landings if not available, guaranteed to use metric tons); total landings (I believe this means the number of caught and non released cod), spawning stock biomass (according to the international seafood sustainability foundation (ISSF), the total weight of all sexually mature female cod), and recruits (according to the ISSF, the number of fish in the youngest age group that is still considered exploitable by fisheries). Also note that the top two metrics (normalized catch and general total catch) have the same number of nonna time series values (7055).
 
 ### Q6 (1 point)
 
@@ -189,6 +189,39 @@ Make a timeseries figure for each stock of Atlantic cod. Rather than coloring by
 
 
 -   What happened to Atlantic cod stocks during the period 1950-present? What information does each metric convey?
+
+(I assume when you say both metrics you mean the top two most commonly reported metrics; normalized catch and total catch?)
+
+I assume that despite it being implied by the wording, you do not want a unique figure for each stock (ie 28 separate figures which would not be easily interpretable at all) but to have separate lines for each stock colored by region. Just in case you did want that though, I made a version with 28 different figures as well.
+
+```{r}
+#join the stock df to the Cod_ts df so that we have region
+Cod_to_plot <- left_join(Cod_ts, stock, join_by(stockid == stockid))
+
+#Then keep only the metrics we're plotting and only the years after 1950
+Cod_to_plot <- Cod_to_plot |> filter((tsid == "CdivMEANC-ratio" | tsid == "TCbest-MT") & tsyear > 1950)
+
+#I looked into stack overflow answers to figure out how to customize the plot properly
+
+Cod_to_plot |> ggplot(aes(x = tsyear, y = tsvalue, color = region, group = stockid)) +
+  geom_point(size = 0.5) + geom_line() + facet_grid(tsid~., scales = "free", switch = "y", 
+                labeller = as_labeller(c("CdivMEANC-ratio" = "Catch: Mean Catch ratio", "TCbest-MT" = "Total Catch (metric tons)"))) + scale_color_manual(values = c("Canada East Coast" = "red", "Europe non EU" = "darkgreen", "European Union" = "lightblue", "US East Coast" = "purple"), drop = FALSE) +
+                  labs(x = "Year", color = "Region") + theme_bw() + theme(axis.title.y = element_blank(), strip.placement = "outside") 
+```
+
+And as promised the version with 28 separate plots, in case "figure for each stock" was intended to imply a separate figure for each plot; in this case I group the lines by assessment for interpretability. Unfortunately I could not find a way to have the same y scale for all plots while using facet_wrap. I do think this is a significantly less interpretable version, but the wording of the question was unclear to me.
+```{r}
+for (id in Cod_IDs) {
+  plot <- Cod_to_plot |> filter(stockid == id) |> ggplot(aes(x = tsyear, y = tsvalue, color = region, group = assessid)) + scale_color_manual(values = c("Canada East Coast" = "red", "Europe non EU" = "green", "European Union" = "lightblue", "US East Coast" = "orange"), drop = FALSE) + 
+          geom_point(size = 0.5, show.legend = TRUE) + geom_line() + facet_grid(tsid~., scales = "free", switch = "y", 
+              labeller = as_labeller(c("CdivMEANC-ratio" = "Catch: Mean Catch ratio", "TCbest-MT" = "Total Catch (metric tons)")))  + xlims(1950, 2022) + 
+              labs(x = "Year", color = "Region") + theme_bw() + theme(axis.title.y = element_blank(), strip.placement = "outside",) 
+  print(plot)
+}
+```
+
+We can see that in the period from 1950 to 2022, total catches of Atlantic cod populations have decreased for most stocks. The top figure shows the normalized cod catch, which makes it easier to look at the change over time of each catch compared to looking at the absolute mean catch (where some stocks simply have much larger catches at all times than others). Looking at that figure, we can see that almost all stocks had above mean catch (normalized catch > 1) in the earlier portion of the 20th century and below mean catch (normalized catch < 1) in recent decades, demonstrating the decrease in catch over time.
+
 
 ### Q7 (1 point)
 
