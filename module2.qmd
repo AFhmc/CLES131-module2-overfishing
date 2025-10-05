@@ -212,7 +212,7 @@ Cod_to_plot |> ggplot(aes(x = tsyear, y = tsvalue, color = region, group = stock
 And as promised the version with 28 separate plots, in case "figure for each stock" was intended to imply a separate figure for each plot; in this case I group the lines by assessment for interpretability. Unfortunately I could not find a way to have the same y scale for all plots while using facet_wrap. I do think this is a significantly less interpretable version, but the wording of the question was unclear to me.
 ```{r}
 for (id in Cod_IDs) {
-  plot <- Cod_to_plot |> filter(stockid == id) |> ggplot(aes(x = tsyear, y = tsvalue, color = region, group = assessid)) + scale_color_manual(values = c("Canada East Coast" = "red", "Europe non EU" = "green", "European Union" = "lightblue", "US East Coast" = "orange"), drop = FALSE) + 
+  plot <- Cod_to_plot |> filter(stockid == id) |> ggplot(aes(x = tsyear, y = tsvalue, color = region, group = assessid)) + scale_color_manual(values = c("Canada East Coast" = "red", "Europe non EU" = "green", "European Union" = "lightblue", "US East Coast" = "purple"), drop = FALSE) + 
           geom_point(size = 0.5, show.legend = TRUE) + geom_line() + facet_grid(tsid~., scales = "free", switch = "y", 
               labeller = as_labeller(c("CdivMEANC-ratio" = "Catch: Mean Catch ratio", "TCbest-MT" = "Total Catch (metric tons)")))  + xlims(1950, 2022) + 
               labs(x = "Year", color = "Region") + theme_bw() + theme(axis.title.y = element_blank(), strip.placement = "outside",) 
@@ -229,13 +229,86 @@ We will recreate a slightly more complex version of a figure from the [Millenniu
 
 Selecting a metric that can be added across stocks, calculate the total fish landings for each region of Atlantic cod. Make a plot similar to Fig. 11 and color by region.
 
-
 Which region does Fig. 11 from the MEA correspond to?
+
+
+```{r}
+# confirm that there are the same number of post 1950 datapoints for all stocks (to allow for proper addition)
+Cod_to_plot <- left_join(Cod_ts, stock, join_by(stockid == stockid))
+Cod_to_plot |> filter(tsid == "TL-MT" & tsyear > 1950) |> group_by(stockid) |> summarize(datapointcount = n(), number_of_assessments = n_distinct(assessid))
+```
+Directly adding the total landings metric between stocks is tricky because some stocks have multiple assessments estimating the total landings over the same time period, and we don't want to double count. To deal with this, I choose the assessment which has the most complete data for each stock (data starting in 1951). It is also worth noting that there are not the same number of stocks being summed for all years, but I don't know how I would fix that; I think that's just how it is. Maybe that implies that there were no landings for those stocks before their start year because of the dropped na values.
+
+```{r}
+#try to figure out which years have data for all stocks
+Cod_to_plot |> filter(tsid == "TL-MT" & tsyear > 1950) |> group_by(tsyear) |> summarize(number_of_datapoints = n(), number_of_stocks = n_distinct(stockid)) 
+
+#this gets the amount of datapoints in each assessment for each stock
+data_per_assessment <- Cod_to_plot |> filter(tsid == "TL-MT" & tsyear > 1950) |> group_by(stockid,assessid) |> summarize(amount_of_data = n()) 
+
+#This then selects the one with the most data
+most_complete_assessments <- data_per_assessment |> arrange(desc(amount_of_data)) |> group_by(stockid) |> summarize(most_data_assessment = first(assessid))
+
+```
+
+Now sum in all the years by region!
+```{r}
+total_landings_plot <- Cod_to_plot |> filter(tsid == "TL-MT" & tsyear > 1950 & assessid %in% pull(most_complete_assessments, most_data_assessment)) |> group_by(region, tsyear) |> summarize(total_landings = sum(tsvalue))
+
+total_landings_plot |> ggplot(aes(x = tsyear, y = total_landings, color = region)) + geom_line() +
+                      scale_color_manual(values = c("Canada East Coast" = "red", "Europe non EU" = "green", "European Union" = "lightblue", "US East Coast" = "purple"), drop = FALSE) + theme_bw() + 
+                      labs(x =  "Year", y = "Sum of Total Landings (metric tons)", color = "Region")
+```
+
+Matching the shapes, we can clearly see that Fig. 11 from the MEA corresponds to the Canada East Coast region.
+
+
+
 
 ### Q8 (1 point)
 
 Under the Management Policies section of the [book chapter](https://pressbooks.pub/extinctionstories/chapter/atlantic-cod/), the authors summarize a few major efforts to restore and protect stocks of Atlantic cod. Focusing only on the US and Canada, update your plot from above to include vertical lines to represent the timing of least three major events and label them clearly on your plot. Doing so will likely involve creating a separate dataframe and using it in one of your ggplot layers (one possible argument within `aes()` is `linetype`). Facet the plot by region and update until it is easily interpretable.
 
+
+There is only one US East Coast stock and it only has total landings reported for a very small portion of time, so I will simply sum it with the Canada East coast and have one line instead of faceting by region; as faceting by region when there are only two regions and one region has hardly any data would not be interpretable.
+
+```{r}
+total_landings_plot <- Cod_to_plot |> 
+  filter(tsid == "TL-MT" & tsyear > 1950 & region %in% c("Canada East Coast", "US East Coast") & assessid %in% pull(most_complete_assessments, most_data_assessment)) |> 
+  group_by(tsyear) |> summarize(total_landings = sum(tsvalue))
+
+total_landings_plot |> ggplot(aes(x = tsyear, y = total_landings)) + geom_line() + theme_bw() + 
+                      labs(x =  "Year", y = "Sum of Total Landings (metric tons)", title = "Total Landings of Atlantic Cod in the Canada/US East Coast")
+```
+
+We add lines representing the 1976 establishment of the Magnuson-Stevens Fishery Conservation and Management Act (MSFCMA), the listing of cod as a vulnerable species in 1996 and the 2006 amendment and reathorization of the MSFCMA.
+
+```{r}
+annotations <- data.frame(year = c(1976, 1996, 2006), label = c("Magnuson-Stevens Fishery Conservation and Management Act (MSFCMA)", "Atlantic Cod Listed As Vulnerable Species","Amendment and Reauthorization of MSFCMA"))
+
+total_landings_plot |> ggplot(aes(x = tsyear, y = total_landings)) + geom_line() + theme_bw() + theme(legend.position = "bottom", legend.justification = "left", legend.direction = "vertical") +
+                      labs(x =  "Year", y = "Sum of Total Landings (metric tons)", title = "Total Landings of Atlantic Cod in the Canada/US East Coast") + geom_vline(data = annotations, aes(xintercept = year, color = label)) + 
+  labs(color = "Event")
+```
+
+You also wanted a region facetted plot, so I will do so; this time including all regions
+
+```{r}
+total_landings_plot2 <- Cod_to_plot |> filter(tsid == "TL-MT" & tsyear > 1950 & assessid %in% pull(most_complete_assessments, most_data_assessment)) |> group_by(region, tsyear) |> summarize(total_landings = sum(tsvalue))
+
+total_landings_plot2 |> ggplot(aes(x = tsyear, y = total_landings)) +facet_wrap(~region, 2,2)+ geom_line() + theme_bw() + theme(legend.position = "bottom", legend.justification = "left", legend.direction = "vertical") +
+                      labs(x =  "Year", y = "Sum of Total Landings (metric tons)", title = "Total Landings of Atlantic Cod in the Canada/US East Coast") + geom_vline(data = annotations, aes(xintercept = year, color = label)) + labs(color = "Event")
+```
+
+
 ### Q9 (2 points)
 
 What happened to Atlantic cod stocks for each region following each piece of legislation or management plan, and why do you think this was so? Your multi-paragraph answer should be informed by content from the book chapter; additional sources are optional, and all sources should be cited.
+
+We can see that in the Canada East Coast, the Magnuson-Stevens Fishery Conservation and Management Act was passed after several decades of decline in Atlantic Cod landings. We can assume that this decline also occured in the US East Coast populations, given that this act was passed by the US congress (Brownell et al, Ch 9). Unfortunately, the two stocks of US East Coast Atlantic Cod that are being tracked do not have total landing data for most of the time frame and so we cannot directly see. This makes sense, given that a decline in cod population was part of the reason for the MSFCMA. Afterwards, we see a stabilization and in fact slight increase in cod levels in Canada over the next 10-15 years; although the MSFCMA targetted US waters and US fisheries, perhaps the reduction in overfishing in the US also impacted Canadian stocks. We see no impact on European stocks, which is natural considering that an American legislation would not be able to impact fish populations in Europe. It is worth noting that in 1968-1972 a Canadian Fisheries act preventing habitat destruction was also instituted and ammended, which could contribute the the observed recovery of Canadian cod populations in the late 1970s. (https://carleton.ca/rgi/wp-content/uploads/Mike-Beale_Fisheries-Act-Case_June-11-2020.pdf)
+
+We see Atlantic Cod listed as a vulnerable species in 1996, which corresponds with a deep dip in Atlantic Cod landings in Canada; this makes sense considering that the reason for listing a species as vulnerable is due to population decline. Unfortunately, neither this or the sustainable fisheries act that was instituted in the same year seemed to lead to recovery of the Canadian Atlantic Cod population, perhaps due to the number of cod having decreased below a sustainable level. We can assume they didn't in America either, considering that the stocks where we have data for landings show low amounts of landings after these acts, and because there was a second amendment to the MSFCMA instituted in 2006. This amendment had no affect on the decline of Canadian populations, although it makes sense that American regulations may not help Canadian populations. According to Brownell et al, these regulations have not reversed the decline in Cod populations in America either; partially due to the overharvested stocks clumping up into groups that make them easier to harvest even while following regulations. 
+
+
+(assumedly also the US East Coast, but we don't have enough data to be sure)
+
