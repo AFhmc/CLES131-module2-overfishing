@@ -159,6 +159,30 @@ Create a vector of the 'stockid' associated with "Atlantic cod". Then turn your 
 -   Which metrics are most commonly reported for Atlantic cod in this timeframe and what do they mean?
 
 
+```{r}
+#Count the stock that have common name Atlantic cod
+stock |> filter(commonname == "Atlantic cod") |> summarize(count = n())
+
+#Group by region
+stock |> filter(commonname == "Atlantic cod") |> group_by(region) |> summarize(count = n())
+
+```
+
+There are 28 unique stocks of Atlantic cod, coming from the regions of Canada East Coast, Europe non EU, European Union, and the US East Coast.
+
+```{r}
+# Get vector of the stockids that are Atlantic Cod
+Cod_IDs <- stock |> filter(commonname == "Atlantic cod") |> pull(stockid)
+
+#Get Timeseries (+ metrics) dataframe that are atlantic cod and nonNA value
+Cod_ts <- timeseries_with_metrics |> filter(stockid %in% Cod_IDs & !is.na(tsvalue)) 
+
+#Look at metrics reported for years after 1950:
+Cod_ts |> filter(tsyear > 1950) |> group_by(tsid) |> summarize(metric_count = n(), meaning = first(tslong)) |> arrange(desc(metric_count))
+```
+
+The 5 most commonly reported metrics in this time frame are CdivMEANC-ratio, TCbest-MT, TL-MT, SSB-MT, and R-E00. Respectively, these represent the catch/mean catch (normalized catch); general total catch (total catch if available, total landings if not available, guaranteed to use metric tons); total landings (I believe this means the number of caught and non released cod), spawning stock biomass (according to the international seafood sustainability foundation (ISSF), the total weight of all sexually mature female cod), and recruits (according to the ISSF, the number of fish in the youngest age group that is still considered exploitable by fisheries).
+
 ### Q6 (1 point)
 
 Make a timeseries figure for each stock of Atlantic cod. Rather than coloring by the identity of the stock, color by the region it comes from (this may require joining). Use `facet_*()` to plot both metrics in a single code chunk. Connect the points for each stock and focus on the period since 1950. Update until the figure is easily interpretable.
