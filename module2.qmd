@@ -95,14 +95,20 @@ I would join stock and assessment using stockid, to represent that each stock in
 In section B of the Database Quick Guide, additional metadata tables are listed in section B. With your data exploration skills, complete the following table:
 
 | B table      | Associated table | join column from B | join column from other |
-|------------------|------------------|------------------|------------------|
-| area         |                  |                    |                        |
-| assessmethod |                  |                    |                        |
-| assessor     |                  |                    |                        |
-| management   |                  |                    |                        |
-| taxonomy     |                  |                    |                        |
+|--------------|------------------|--------------------|------------------------|
+| area         | stock            |    areaid          |       areaid           |
+| assessmethod | assessment       |    methodshort     |    assessmethod        |
+| assessor     | assessment       |    assessorid      |    assessorid          |
+| management   | assessor         |    mgmt            |        mgmt            |
+| taxonomy     |  stock           |   scientificname   |    scientificname      |
 
 \*Note that assessmethod is not a data.frame, which was perhaps an oversight; consider turning it into one for the ease of using tidyverse functions.
+
+```{r}
+assessmethod <- data.frame(assessmethod)
+```
+
+Note that I might be wrong about what the intended associated table is, because some of these tables could be reasonably associated with multiple other tables, for example assessor is associated with both management through mngmt and assessment through assessorid.
 
 ### Q4 (1 point)
 
